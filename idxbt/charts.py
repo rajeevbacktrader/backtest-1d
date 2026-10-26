@@ -74,7 +74,7 @@ def equity(res: Result, title: str):
     tr = ddm.idxmin()
     f.add_trace(go.Scatter(x=[tr], y=[ddm.min()], mode="markers+text", showlegend=False,
                            marker=dict(color=LOSS, size=11, symbol="diamond", line=dict(color=PAPER, width=2)),
-                           text=[f"max DD {ddm.min():.1f}%"], textposition="bottom center", textfont=dict(color=INK, size=11),
+                           text=[f"max DD {ddm.min():.1f}%"], textposition="middle left", textfont=dict(color=INK, size=11),
                            hovertemplate=f"{tr:%d %b %Y}: %{{y:.1f}}%<extra></extra>"), 2, 1)
 
     f.update_yaxes(type="log" if log else "linear", tickprefix="₹", title="Equity", row=1, col=1)
@@ -247,3 +247,101 @@ def build_all(res: Result, m: dict, title: str, unit: str = "%") -> dict:
         out["exit_bars"] = ("Breakdown", exit_bars(res, unit)); out["weekday"] = ("Breakdown", weekday(res, unit))
     out["yearly"] = ("Calendar", yearly(m["yearly"])); out["monthly"] = ("Calendar", monthly(m["monthly"]))
     return out
+
+
+# ------------------------------------------------------------------ portfolio charts
+SLEEVE_COLORS = [SKY, SUN, ROSE, LILAC, WIN, "#f0b27a", "#85c1e9", "#d7bde2", "#a3e4d7", "#f5b7b1"]
+
+
+def portfolio_equity(c):
+    """Combined equity + each strategy sleeve (top) and combined drawdown (bottom) on one shared time axis."""
+    eq, cap = c.equity, c.capital
+    f = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[.7, .3], vertical_spacing=.04)
+    f.add_trace(go.Scatter(x=c.bench.index, y=c.bench, name="Buy & hold (same weights)", line=dict(color=BENCH, width=2),
+                           hovertemplate="₹%{y:,.0f}"), 1, 1)
+    for i, col in enumerate(c.sleeves_eq.columns):
+        f.add_trace(go.Scatter(x=c.sleeves_eq.index, y=c.sleeves_eq[col], name=f"{col} (standalone)", visible="legendonly" if len(c.sleeves_eq.columns) > 6 else True,
+                               line=dict(color=SLEEVE_COLORS[i % len(SLEEVE_COLORS)], width=1.4, dash="dot"), opacity=.9,
+                               hovertemplate="₹%{y:,.0f}"), 1, 1)
+    f.add_trace(go.Scatter(x=eq.index, y=eq, name="COMBINED", line=dict(color=STRAT, width=3.4), fill="tozeroy",
+                           fillcolor="rgba(154,168,255,.12)", hovertemplate="₹%{y:,.0f}"), 1, 1)
+    low = min(eq.min(), c.bench.min(), c.sleeves_eq.min().min()); high = max(eq.max(), c.bench.max(), c.sleeves_eq.max().max())
+    log = high / low > 4
+    for ser, col in ((eq, STRAT), (c.bench, MUTED)):
+        f.add_annotation(x=ser.index[-1], y=float(np.log10(ser.iloc[-1])) if log else float(ser.iloc[-1]), xref="x", yref="y",
+                         text=f"<b>₹{ser.iloc[-1]:,.0f}</b><br>{ser.iloc[-1] / cap - 1:+.0%}", showarrow=False, xanchor="left", xshift=8,
+                         font=dict(color=col, size=12))
+    for col in c.sleeves_eq.columns:
+        pass
+    # drawdowns: each sleeve (on its own capital) thin, combined bold
+    for i, col in enumerate(c.norm.columns):
+        d = (c.norm[col] / c.norm[col].cummax() - 1) * 100
+        f.add_trace(go.Scatter(x=d.index, y=d, name=f"{col} DD", showlegend=False, line=dict(color=SLEEVE_COLORS[i % len(SLEEVE_COLORS)], width=1, dash="dot"),
+                               hovertemplate=f"{col}: %{{y:.1f}}%"), 2, 1)
+    dd = (eq / eq.cummax() - 1) * 100
+    f.add_trace(go.Scatter(x=dd.index, y=dd, name="COMBINED DD", showlegend=False, line=dict(color=LOSS, width=2.4), fill="tozeroy",
+                           fillcolor="rgba(244,165,143,.35)", hovertemplate="Combined: %{y:.1f}%"), 2, 1)
+    tr = dd.idxmin()
+    f.add_trace(go.Scatter(x=[tr], y=[dd.min()], mode="markers+text", showlegend=False,
+                           marker=dict(color=LOSS, size=11, symbol="diamond", line=dict(color=PAPER, width=2)),
+                           text=[f"max DD {dd.min():.1f}%"], textposition="middle left", textfont=dict(color=INK, size=11),
+                           hovertemplate=f"{tr:%d %b %Y}: %{{y:.1f}}%<extra></extra>"), 2, 1)
+    f.update_yaxes(type="log" if log else "linear", tickprefix="₹", title="Equity", row=1, col=1)
+    f.update_yaxes(title="Drawdown %", ticksuffix="%", row=2, col=1)
+    f.update_xaxes(rangeselector=dict(
+        buttons=[dict(count=1, label="1Y", step="year", stepmode="backward"), dict(count=3, label="3Y", step="year", stepmode="backward"),
+                 dict(count=5, label="5Y", step="year", stepmode="backward"), dict(step="all", label="All")],
+        bgcolor=PLOT, activecolor=STRAT, font=dict(color=INK, size=11), x=0, y=1.0, yanchor="bottom"), row=1, col=1)
+    pad = (eq.index[-1] - eq.index[0]) * 0.035
+    f.update_xaxes(range=[eq.index[0], eq.index[-1] + pad])
+    f.update_layout(hovermode="x unified", margin=dict(r=90, t=86), legend=dict(orientation="h", x=.01, y=.985, bgcolor="rgba(0,0,0,0)"),
+                    updatemenus=[dict(type="buttons", direction="right", x=1, xanchor="right", y=1.0, yanchor="bottom", showactive=False,
+                                      bgcolor=PLOT, bordercolor=GRID, font=dict(color=INK, size=11),
+                                      buttons=[dict(label="Linear", method="relayout", args=[{"yaxis.type": "linear"}]),
+                                               dict(label="Log", method="relayout", args=[{"yaxis.type": "log"}])])])
+    return _style(f, "Combined equity & drawdown · dotted lines = each strategy on its own", 680)
+
+
+def corr_heatmap(m: pd.DataFrame, title: str, lo=-1.0, hi=1.0, fmt=".2f"):
+    f = go.Figure(go.Heatmap(z=m.values, x=list(m.columns), y=list(m.index), zmin=lo, zmax=hi, xgap=4, ygap=4,
+                             colorscale=[[0, LOSS], [.5, PLOT], [1, STRAT]] if lo < 0 else [[0, PLOT], [1, STRAT]],
+                             texttemplate="%{z:" + fmt + "}", textfont=dict(size=13, color=INK),
+                             colorbar=dict(thickness=10), hovertemplate="%{y} vs %{x}: %{z:" + fmt + "}<extra></extra>"))
+    f.update_yaxes(autorange="reversed"); f.update_xaxes(side="top")
+    f.update_layout(margin=dict(l=14, r=14, t=100, b=14))
+    return _style(f, title, max(320, 70 * len(m) + 150), legend=False)
+
+
+def contribution(c):
+    s = c.contribution.sort_values()
+    tot = s.sum()
+    f = go.Figure(go.Bar(y=s.index, x=s.values, orientation="h", marker_color=np.where(s.values > 0, WIN, LOSS),
+                         text=[f"₹{v:+,.0f}" + (f" · {v / tot:.0%} of net" if tot > 0 and v > 0 else "") for v in s.values],
+                         textposition="outside", cliponaxis=False, hovertemplate="%{y}: ₹%{x:,.0f}<extra></extra>"))
+    f.update_layout(margin=dict(r=140)); f.update_xaxes(title="Net P&L ₹ (portfolio)")
+    return _style(f, "Who made (or lost) the money?", max(260, 60 * len(s) + 120), legend=False)
+
+
+def portfolio_yearly(c):
+    def yr(s):
+        y = s.resample("YE").last().pct_change()
+        y.iloc[0] = s.resample("YE").last().iloc[0] / s.iloc[0] - 1
+        return y * 100
+    f = go.Figure()
+    for i, col in enumerate(c.norm.columns):
+        y = yr(c.norm[col])
+        f.add_trace(go.Bar(x=y.index.year.astype(str), y=y, name=col, marker_color=SLEEVE_COLORS[i % len(SLEEVE_COLORS)], opacity=.85,
+                           hovertemplate="%{x}: %{y:.1f}%"))
+    y = yr(c.equity)
+    f.add_trace(go.Bar(x=y.index.year.astype(str), y=y, name="COMBINED", marker_color=STRAT, hovertemplate="%{x}: %{y:.1f}%"))
+    f.update_layout(barmode="group", bargap=.2); f.update_yaxes(title="Return %")
+    return _style(f, "Year by year · each strategy vs the combined portfolio", 380)
+
+
+def combos_scatter(df: pd.DataFrame):
+    f = go.Figure(go.Scatter(x=-df["Max DD"] * 100, y=df["CAGR"] * 100, mode="markers", text=df["Mix"],
+                             marker=dict(size=np.clip(df["Strategies"] * 5 + 6, 8, 26), color=df["Sharpe"], colorscale=[[0, LOSS], [.5, SUN], [1, WIN]],
+                                         colorbar=dict(title="Sharpe", thickness=10), line=dict(color=PAPER, width=1)),
+                             hovertemplate="%{text}<br>CAGR %{y:.1f}% · max DD %{x:.1f}%<extra></extra>"))
+    f.update_xaxes(title="Max drawdown % (smaller is better →)", autorange="reversed"); f.update_yaxes(title="CAGR %")
+    return _style(f, "Every possible mix · return vs risk", 420, legend=False)

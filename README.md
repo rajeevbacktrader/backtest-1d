@@ -47,6 +47,14 @@ Examples: `entry: rsi14 < 30 and close > sma 200 buy; exit: rsi14 > 60 or sl 3%`
 - One position at a time, 100% of equity per trade, compounded, no re-entry on the candle you exit.
 - Indices aren't tradable themselves: results approximate index futures/ETFs. Fees default to 0.03%/side.
 
+## Portfolio tab (combine several strategies)
+Open the **🧩 Portfolio** tab: add rows S1, S2, S3… (➕), pick an index and write the strategy text in each row, press **Run all strategies**,
+then **tick the ones to analyse together** — the combined results update instantly as you tick/untick.
+You get: combined equity + drawdown (individual strategies dotted), combined CAGR / max DD / Sharpe / profit factor / win rate,
+daily & monthly return correlation, time-overlap, P&L contribution, year-by-year, a monthly calendar, leave-one-out and an
+"every possible mix" search. Capital is split equally (or by custom %); each strategy compounds independently on its share.
+Strategies on indices with different history lengths are compared on their common date window.
+
 ## Tests
 `python -m pytest -q tests`
 
