@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import charts
+from . import charts, report_view
 from .engine import Result
 
 
@@ -24,7 +24,17 @@ def write_report(res: Result, m: dict, ins: list[str], title: str, out_dir: Path
         pf = charts.build_all(res, m, title, unit="pts")
         for k in ("waterfall", "distribution", "exit_bars", "scatter", "weekday"):
             figs[k + "_pts"] = ("Points", pf[k][1])
-    parts, first = [], True
+    # "backtest report" cards first (they carry the plotly.js bundle), then the other charts
+    rv_html, first = "", True
+    if len(res.trades):
+        rv = report_view.build(res.equity, res.trades, "All", "trades", "Month")
+        cards = []
+        for k, lab in (("equity", "EQUITY · cumulative P&L ₹"), ("drawdown", "DRAWDOWN ₹"), ("pnl", "P&L ₹ · per month")):
+            cards.append(f'<div class="rvbox2"><div class="rv-label">{lab}</div>' +
+                         rv["figs"][k].to_html(full_html=False, include_plotlyjs=first, config={"displayModeBar": False}) + "</div>")
+            first = False
+        rv_html = ('<div class="rvbox"><div class="rv-head">◎ BACKTEST REPORT</div>' + report_view.chips_html(rv["chips"]) + "".join(cards) + "</div>")
+    parts = []
     for grp in dict.fromkeys(g for g, _ in figs.values()):
         parts.append(f"<h3>{grp}</h3>")
         for k, (g, f) in figs.items():
@@ -63,13 +73,13 @@ body{{font:15px/1.55 Poppins,Inter,system-ui,sans-serif;color:#e6e8fa;background
 h1{{font-size:22px;margin:.2em 0}}h2{{font-size:17px;margin:1.6em 0 .4em}}pre{{background:#1c1e3a;padding:12px;border-radius:14px;white-space:pre-wrap}}
 table{{border-collapse:collapse}}td,th{{padding:4px 12px;border-bottom:1px solid #2a2c4c;text-align:right}}td:first-child,th:first-child{{text-align:left}}
 .g{{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}}img{{max-width:100%;margin:8px 0}}li{{margin:.4em 0}}
-.sc{{max-height:420px;overflow:auto}}.meta{{color:#8d92b5}}</style></head><body>
+.sc{{max-height:420px;overflow:auto}}.meta{{color:#8d92b5}}.rvbox{{background:#fff;color:#111827;border-radius:16px;padding:14px 16px;margin:14px 0}}.rvbox2{{border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px 2px;margin:12px 0}}.rv-chips{{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 4px}}.rv-chip{{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 16px;min-width:96px}}.rv-l{{font:600 10px/1 Inter,system-ui,sans-serif;letter-spacing:.14em;color:#6b7280;margin-bottom:7px}}.rv-v{{font:700 19px/1 Inter,system-ui,sans-serif}}.rv-label{{font:600 11px/1 Inter,system-ui,sans-serif;letter-spacing:.16em;color:#6b7280;margin:2px 0 6px}}.rv-head{{font:600 11px/1 Inter,system-ui,sans-serif;letter-spacing:.16em;color:#6b7280;margin-bottom:6px}}</style></head><body>
 <h1>Backtest — {html.escape(title)}</h1>
 <div class="meta">{m['start']:%d %b %Y} → {m['end']:%d %b %Y} · {m['candles']} daily candles · fill: {res.params['fill']} · fee {res.params['fee_pct']}%/side · slippage {res.params['slippage_pct']}%</div>
 <h2>Strategy</h2><pre>{html.escape(res.strategy.source)}</pre><pre>{html.escape(res.strategy.describe())}</pre>
 <div class="g"><div><h2>Returns &amp; risk</h2><table><tr><th></th><th>Strategy</th><th>Buy &amp; hold</th></tr>{t1}</table></div>
 <div><h2>Trades</h2><table>{t2}</table></div></div>
-<h2>Insights</h2><ul>{li}</ul><h2>Charts</h2>{imgtags}
+{rv_html}<h2>Insights</h2><ul>{li}</ul><h2>Charts</h2>{imgtags}
 <h2>All trades (latest first)</h2><div class="sc">{trades_html}</div>
 <p class="meta">Backtest on index levels (not directly tradable; a proxy for futures/ETF). Past performance does not predict future results. Not investment advice.</p>
 </body></html>"""

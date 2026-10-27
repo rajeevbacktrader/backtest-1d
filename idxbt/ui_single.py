@@ -2,7 +2,7 @@
 import pandas as pd
 import streamlit as st
 
-from . import charts, data, engine, metrics, report
+from . import charts, data, engine, metrics, report, report_view
 from .dsl import QueryError, parse_query
 from .ui_common import PRESETS, load_df, pct
 
@@ -80,14 +80,16 @@ def render(cfg):
             k2[1].metric("Avg points / trade", f"{t['avg_pts']:+,.1f}", f"win {t['avg_win_pts']:+,.0f} / loss {t['avg_loss_pts']:+,.0f}", delta_color="off")
             k2[2].metric("Best trade", f"{t['best_pts']:+,.0f} pts", f"{t['best']:+.2f}%", delta_color="off")
             k2[3].metric("Worst trade", f"{t['worst_pts']:+,.0f} pts", f"{t['worst']:+.2f}%", delta_color="off")
-        tabs = st.tabs(["💡 Insights"] + [{"Performance": "📈 Performance", "Trades": "🎯 Trades", "Breakdown": "🍩 Breakdown",
+        tabs = st.tabs(["📑 Report", "💡 Insights"] + [{"Performance": "📈 Performance", "Trades": "🎯 Trades", "Breakdown": "🍩 Breakdown",
                                            "Calendar": "🗓 Calendar"}[g] for g in groups] + ["📋 Trades table"])
         with tabs[0]:
+            report_view.render_st(res.equity, res.trades, f"single_{name}", show_points=True, title=f"BACKTEST REPORT · {name}")
+        with tabs[1]:
             for i in ins:
                 st.markdown(f"- {i}")
             if len(m["by_reason"]):
                 st.markdown("**By exit reason**"); st.dataframe(m["by_reason"].round(3), width="stretch")
-        for tab, g in zip(tabs[1:-1], groups):
+        for tab, g in zip(tabs[2:-1], groups):
             with tab:
                 for key, (gg, fig) in figs.items():
                     if gg == g:

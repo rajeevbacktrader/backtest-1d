@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from . import charts, data, engine, metrics
+from . import charts, data, engine, metrics, report_view
 from . import portfolio as pf
 from .dsl import QueryError, parse_query
 from .ui_common import PRESETS, load_df, pct
@@ -138,14 +138,17 @@ def render(cfg):
         st.caption(f"Cards compare the combined result with the individual strategies (avg / worst / best). Average pairwise correlation of daily returns: **{cd.mean():.2f}** · Calmar (CAGR ÷ max drawdown): **{cb['calmar']:.2f}**")
     st.dataframe(_fmt_table(c.table), width="stretch")
 
-    tabs = st.tabs(["💡 Insights", "📈 Combined equity & DD", "🔗 Correlation", "📊 Contribution & years", "🗓 Monthly",
+    tabs = st.tabs(["📑 Report", "💡 Insights", "📈 Combined equity & DD", "🔗 Correlation", "📊 Contribution & years", "🗓 Monthly",
                     "🧪 What-if", "📋 Trades"])
     with tabs[0]:
+        report_view.render_st(c.equity, c.trades, "pf", show_points=False,
+                              title="PORTFOLIO REPORT · " + ", ".join(x.name for x in chosen))
+    with tabs[1]:
         for i in c.insights:
             st.markdown(f"- {i}")
-    with tabs[1]:
-        st.plotly_chart(charts.portfolio_equity(c), width="stretch", key="pf_eq")
     with tabs[2]:
+        st.plotly_chart(charts.portfolio_equity(c), width="stretch", key="pf_eq")
+    with tabs[3]:
         if len(chosen) < 2:
             st.info("Tick two or more strategies to see correlations.")
         else:
@@ -154,12 +157,12 @@ def render(cfg):
             st.plotly_chart(charts.corr_heatmap(c.corr_monthly, "Monthly-return correlation"), width="stretch", key="pf_c2")
             st.plotly_chart(charts.corr_heatmap(c.overlap, "Time overlap: share of active days when both are in a trade", 0, 1, ".0%"),
                             width="stretch", key="pf_c3")
-    with tabs[3]:
+    with tabs[4]:
         st.plotly_chart(charts.contribution(c), width="stretch", key="pf_contrib")
         st.plotly_chart(charts.portfolio_yearly(c), width="stretch", key="pf_year")
-    with tabs[4]:
-        st.plotly_chart(charts.monthly(metrics.periodic_returns(c.equity, "ME")), width="stretch", key="pf_month")
     with tabs[5]:
+        st.plotly_chart(charts.monthly(metrics.periodic_returns(c.equity, "ME")), width="stretch", key="pf_month")
+    with tabs[6]:
         if len(chosen) < 2:
             st.info("Tick two or more strategies for what-if analysis.")
         else:
@@ -186,7 +189,7 @@ def render(cfg):
                     st.plotly_chart(charts.combos_scatter(df), width="stretch", key="pf_scatter")
                     st.caption("⚠️ Picking the best of many mixes on the same history flatters the result (selection bias). "
                                "Prefer mixes that are good on several measures and still look reasonable on a different date range.")
-    with tabs[6]:
+    with tabs[7]:
         t = c.trades.copy()
         t["entry_date"] = pd.to_datetime(t["entry_date"]).dt.strftime("%Y-%m-%d"); t["exit_date"] = pd.to_datetime(t["exit_date"]).dt.strftime("%Y-%m-%d")
         show = t[["strategy", "symbol", "direction", "entry_date", "exit_date", "entry_price", "exit_price", "bars", "ret_pct", "pts",

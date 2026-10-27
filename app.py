@@ -1,7 +1,7 @@
 """Web portal:  streamlit run app.py   (or ./run.sh / run.bat)"""
 import streamlit as st
 
-from idxbt import data, ui_portfolio, ui_single
+from idxbt import data, report_view, ui_portfolio, ui_single
 
 st.set_page_config(page_title="Index Backtester", page_icon="📈", layout="wide")
 st.markdown('''<style>
@@ -13,7 +13,8 @@ st.markdown('''<style>
 .stButton>button{border-radius:14px}
 h1{background:linear-gradient(90deg,#9aa8ff,#c4a8f0,#f2a9c6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .stTabs [data-baseweb="tab"]{border-radius:12px 12px 0 0;padding:8px 16px}
-</style>''', unsafe_allow_html=True)
+[class*="st-key-rv-"]{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:12px 16px 6px;margin-bottom:12px}
+'''+report_view.CSS+'''</style>''', unsafe_allow_html=True)
 
 # --------------------------------------------------------- auto update (once per browser session)
 if "auto_done" not in st.session_state:
