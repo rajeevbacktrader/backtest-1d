@@ -9,6 +9,13 @@ import plotly.graph_objects as go
 
 GREEN, RED, BLUE, INK, MUTED, GRID = "#22c55e", "#ef4444", "#2563eb", "#111827", "#6b7280", "#eef0f3"
 G_FILL, R_FILL = "rgba(34,197,94,.13)", "rgba(239,68,68,.13)"
+
+
+def set_colors(pos: str, neg: str, accent: str):
+    """Recolour the report cards (called by charts.set_palette)."""
+    global GREEN, RED, BLUE, G_FILL, R_FILL
+    rgba = lambda h, a: "rgba(%d,%d,%d,%s)" % (int(h[1:3], 16), int(h[3:5], 16), int(h[5:7], 16), a)
+    GREEN, RED, BLUE, G_FILL, R_FILL = pos, neg, accent, rgba(pos, .13), rgba(neg, .13)
 RANGES = [("6M", 183), ("1Y", 365), ("3Y", 3 * 365), ("5Y", 5 * 365), ("All", None)]
 GROUPS = ["Month", "Trade", "Year"]
 BASES = {"Closed trades": "trades", "Daily (MTM)": "daily"}
@@ -98,7 +105,7 @@ def _equity_fig(cum: pd.Series, xr):
 
 
 def _dd_fig(idx, dd: pd.Series, xr):
-    f = go.Figure(go.Scatter(x=idx, y=dd, fill="tozeroy", fillcolor="rgba(239,68,68,.15)", line=dict(color=RED, width=1.6),
+    f = go.Figure(go.Scatter(x=idx, y=dd, fill="tozeroy", fillcolor=R_FILL, line=dict(color=RED, width=1.6),
                              hovertemplate="%{x|%d %b %Y}<br>₹%{y:,.0f}<extra></extra>"))
     f = _base(f, xr, 190)
     f.update_yaxes(range=[min(dd.min() * 1.15, -1), 0.0 + abs(dd.min()) * 0.03])

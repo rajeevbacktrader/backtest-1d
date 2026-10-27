@@ -56,3 +56,17 @@ def test_pnl_bars_group_sums():
         f = rv.build(eq, t, "All", "trades", g)["figs"]["pnl"]
         assert sum(f.data[0].y) == 9000
     assert "6M" in rv.available_ranges(eq)
+
+
+def test_palette_switch_recolours_charts_and_report_cards():
+    from idxbt import charts
+    try:
+        charts.set_palette("Classic · light")
+        assert charts.STRAT == "#2563eb" and charts.TEMPLATE == "plotly_white" and rv.BLUE == "#2563eb"
+        charts.set_palette("no such palette")                 # unknown name falls back to the default
+        assert charts.PALETTE == charts.DEFAULT_PALETTE and charts.TEMPLATE == "plotly_dark"
+        eq, t = mk()
+        charts.set_palette("Vivid · dark")
+        assert rv.build(eq, t)["chips"][0][2] == rv.GREEN == "#16c784"
+    finally:
+        charts.set_palette(charts.DEFAULT_PALETTE)

@@ -19,3 +19,10 @@ def load_df(sym, start, end, _stamp):
 
 def pct(x):
     return f"{x:.1%}"
+
+
+def plotly_chart(fig, **kw):
+    """st.plotly_chart without Streamlit's own colour theme, so the chosen graph palette is shown exactly."""
+    kw.setdefault("theme", None)
+    kw.setdefault("width", "stretch")
+    st.plotly_chart(fig, **kw)

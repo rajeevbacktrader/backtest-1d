@@ -1,7 +1,7 @@
 """Web portal:  streamlit run app.py   (or ./run.sh / run.bat)"""
 import streamlit as st
 
-from idxbt import data, report_view, ui_portfolio, ui_single
+from idxbt import charts, data, report_view, ui_portfolio, ui_single
 
 st.set_page_config(page_title="Index Backtester", page_icon="📈", layout="wide")
 st.markdown('''<style>
@@ -55,6 +55,8 @@ with st.sidebar:
     slip = st.number_input("Slippage % per side", 0.0, 2.0, 0.0, 0.01)
     cap = st.number_input("Starting capital ₹", 1000.0, 1e10, 100000.0, 10000.0)
     rf = st.number_input("Risk-free rate % (for Sharpe)", 0.0, 15.0, 0.0, 0.5) / 100
+    pal = st.selectbox("🎨 Graph colours", list(charts.PALETTES), key="palette",
+                       help="Changes only the graphs, not the rest of the portal.")
     st.divider()
     st.subheader("Data")
     st.toggle("Auto-update on startup", value=True, key="auto_on",
@@ -81,6 +83,8 @@ with st.sidebar:
         with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as f:
             f.write(up.getvalue())
         st.success(f"{data.import_csv(tgt, f.name)} rows imported")
+
+charts.set_palette(pal)
 
 # --------------------------------------------------------------------- main
 st.title("📈 Index Backtester")

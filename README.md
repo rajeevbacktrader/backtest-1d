@@ -55,6 +55,10 @@ daily & monthly return correlation, time-overlap, P&L contribution, year-by-year
 "every possible mix" search. Capital is split equally (or by custom %); each strategy compounds independently on its share.
 Strategies on indices with different history lengths are compared on their common date window.
 
+## Graph colours
+Sidebar → **🎨 Graph colours**: Pastel · dark (default), Vivid · dark, Classic green/red · dark, Pastel · light, Classic · light.
+It recolours only the graphs (and the white report cards), not the rest of the portal. Drawdown is its own graph next to the equity curve.
+
 ## Tests
 `python -m pytest -q tests`
 

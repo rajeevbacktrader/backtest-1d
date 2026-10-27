@@ -4,7 +4,7 @@ import streamlit as st
 
 from . import charts, data, engine, metrics, report, report_view
 from .dsl import QueryError, parse_query
-from .ui_common import PRESETS, load_df, pct
+from .ui_common import PRESETS, load_df, pct, plotly_chart
 
 
 def render(cfg):
@@ -93,7 +93,7 @@ def render(cfg):
             with tab:
                 for key, (gg, fig) in figs.items():
                     if gg == g:
-                        st.plotly_chart(fig, width="stretch", key=f"{name}_{key}_{unit}")
+                        plotly_chart(fig, width="stretch", key=f"{name}_{key}_{unit}")
         with tabs[-1]:
             st.dataframe(res.trades.iloc[::-1], width="stretch", hide_index=True)
             st.download_button("Download trades CSV", res.trades.to_csv(index=False), f"{name}_trades.csv")

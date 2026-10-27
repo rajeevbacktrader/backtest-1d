@@ -8,13 +8,48 @@ from plotly.subplots import make_subplots
 
 from .engine import Result
 
-# pastel palette (line colours are a touch deeper so thin lines stay readable)
-STRAT, STRAT_FILL = "#9aa8ff", "rgba(154,168,255,.20)"
-BENCH, BENCH_FILL = "#7d84a6", "rgba(125,132,166,.22)"
-WIN, LOSS = "#7fd4b0", "#f4a58f"
-LILAC, SUN, SKY, ROSE = "#c4a8f0", "#f7d58b", "#9bd3f2", "#f2a9c6"
-INK, MUTED, GRID, PAPER, PLOT = "#e6e8fa", "#8d92b5", "#2a2c4c", "#161830", "#1c1e3a"
+def _rgba(hex_: str, a: float) -> str:
+    h = hex_.lstrip("#")
+    return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{a})"
+
+
+# Each palette: series colours + background. "pos/neg/accent" are the stronger colours used on the white report cards.
+PALETTES = {
+    "Pastel · dark": dict(STRAT="#9aa8ff", BENCH="#7d84a6", WIN="#7fd4b0", LOSS="#f4a58f", LILAC="#c4a8f0", SUN="#f7d58b", SKY="#9bd3f2",
+                          ROSE="#f2a9c6", INK="#e6e8fa", MUTED="#8d92b5", GRID="#2a2c4c", PAPER="#161830", PLOT="#1c1e3a", TEMPLATE="plotly_dark",
+                          WIN_D="#3fb98a", LOSS_D="#e8765b", POS="#22c55e", NEG="#ef4444", ACCENT="#2563eb"),
+    "Vivid · dark": dict(STRAT="#5b9dff", BENCH="#8a93a8", WIN="#2ee6a6", LOSS="#ff5d7a", LILAC="#b57bff", SUN="#ffd23f", SKY="#38d5ff",
+                         ROSE="#ff7ac8", INK="#eef1ff", MUTED="#98a1bd", GRID="#262b45", PAPER="#0f1222", PLOT="#141830", TEMPLATE="plotly_dark",
+                         WIN_D="#10c98a", LOSS_D="#ff3b5f", POS="#16c784", NEG="#ff3b5f", ACCENT="#3b82f6"),
+    "Classic green/red · dark": dict(STRAT="#60a5fa", BENCH="#94a3b8", WIN="#22c55e", LOSS="#ef4444", LILAC="#a78bfa", SUN="#fbbf24", SKY="#22d3ee",
+                                     ROSE="#fb7185", INK="#e5e7eb", MUTED="#9ca3af", GRID="#2b3140", PAPER="#111827", PLOT="#161e2e", TEMPLATE="plotly_dark",
+                                     WIN_D="#16a34a", LOSS_D="#dc2626", POS="#22c55e", NEG="#ef4444", ACCENT="#2563eb"),
+    "Pastel · light": dict(STRAT="#7b8cf0", BENCH="#a3a9bd", WIN="#7fd4b0", LOSS="#f4a58f", LILAC="#c4a8f0", SUN="#f2cc72", SKY="#8cc9ea",
+                           ROSE="#f2a9c6", INK="#3b3f5c", MUTED="#8a8fa8", GRID="#eceaf7", PAPER="#fbfaff", PLOT="#ffffff", TEMPLATE="plotly_white",
+                           WIN_D="#3fb98a", LOSS_D="#e8765b", POS="#22c55e", NEG="#ef4444", ACCENT="#2563eb"),
+    "Classic · light": dict(STRAT="#2563eb", BENCH="#9ca3af", WIN="#22c55e", LOSS="#ef4444", LILAC="#8b5cf6", SUN="#f59e0b", SKY="#06b6d4",
+                            ROSE="#ec4899", INK="#111827", MUTED="#6b7280", GRID="#eef0f3", PAPER="#ffffff", PLOT="#ffffff", TEMPLATE="plotly_white",
+                            WIN_D="#16a34a", LOSS_D="#dc2626", POS="#22c55e", NEG="#ef4444", ACCENT="#2563eb"),
+}
+DEFAULT_PALETTE = "Pastel · dark"
+PALETTE = DEFAULT_PALETTE
+
+
+def set_palette(name: str):
+    """Switch every chart colour (module globals are read at draw time). Also recolours the report cards."""
+    global PALETTE, SLEEVE_COLORS, STRAT_FILL, BENCH_FILL
+    name = name if name in PALETTES else DEFAULT_PALETTE
+    PALETTE = name
+    globals().update(PALETTES[name])
+    STRAT_FILL, BENCH_FILL = _rgba(STRAT, .2), _rgba(BENCH, .22)
+    SLEEVE_COLORS = [SKY, SUN, ROSE, LILAC, WIN, "#f0b27a", "#85c1e9", "#d7bde2", "#a3e4d7", "#f5b7b1"]
+    from . import report_view
+    report_view.set_colors(POS, NEG, ACCENT)
+
+
 FONT = "Poppins, Inter, system-ui, sans-serif"
+SLEEVE_COLORS: list = []
+set_palette(DEFAULT_PALETTE)
 
 
 def _u(t: pd.DataFrame, unit: str):
@@ -25,7 +60,7 @@ def _u(t: pd.DataFrame, unit: str):
 def _style(fig, title, h=420, legend=True):
     fig.update_layout(
         title=dict(text=f"<b>{title}</b>", x=.01, font=dict(size=16, color=INK)),
-        height=h, template="plotly_dark", paper_bgcolor=PAPER, plot_bgcolor=PLOT,
+        height=h, template=TEMPLATE, paper_bgcolor=PAPER, plot_bgcolor=PLOT,
         font=dict(family=FONT, color=INK, size=12), margin=dict(l=14, r=14, t=56, b=14) if not fig.layout.margin.t else fig.layout.margin,
         hoverlabel=dict(bgcolor=PLOT, font=dict(family=FONT, color=INK), bordercolor=GRID),
         legend=dict(orientation="h", y=1.1, x=1, xanchor="right", bgcolor="rgba(0,0,0,0)") if not fig.layout.legend.x else fig.layout.legend, showlegend=legend)
@@ -34,22 +69,56 @@ def _style(fig, title, h=420, legend=True):
     return fig
 
 
+def _x_range(idx):
+    return [idx[0], idx[-1] + (idx[-1] - idx[0]) * 0.035]
+
+
+def _scale_menu(f, log, buttons):
+    f.update_xaxes(rangeselector=dict(buttons=buttons, bgcolor=PLOT, activecolor=STRAT, font=dict(color=INK, size=11), x=0, y=1.0, yanchor="bottom"))
+    f.update_layout(updatemenus=[dict(type="buttons", direction="right", x=1, xanchor="right", y=1.0, yanchor="bottom", showactive=False,
+                                      bgcolor=PLOT, bordercolor=GRID, font=dict(color=INK, size=11),
+                                      buttons=[dict(label="Linear", method="relayout", args=[{"yaxis.type": "linear"}]),
+                                               dict(label="Log", method="relayout", args=[{"yaxis.type": "log"}])])])
+
+
+_RANGES = [dict(count=6, label="6M", step="month", stepmode="backward"), dict(count=1, label="1Y", step="year", stepmode="backward"),
+           dict(count=3, label="3Y", step="year", stepmode="backward"), dict(count=5, label="5Y", step="year", stepmode="backward"),
+           dict(step="all", label="All")]
+
+
+def _end_labels(f, series_colors, log, cap):
+    for ser, col in series_colors:     # annotations on a log axis take log10 coordinates
+        f.add_annotation(x=ser.index[-1], y=float(np.log10(ser.iloc[-1])) if log else float(ser.iloc[-1]), xref="x", yref="y",
+                         text=f"<b>₹{ser.iloc[-1]:,.0f}</b><br>{ser.iloc[-1] / cap - 1:+.0%}", showarrow=False,
+                         xanchor="left", xshift=8, font=dict(color=col, size=12))
+
+
+def _dd_traces(f, series, bench=None, maxdd_for=None):
+    """Underwater traces (percent). `series`: list of (Series, name, colour, fill, width, dash)."""
+    for ser, name, col, fill, w, dash in series:
+        dd = (ser / ser.cummax() - 1) * 100
+        f.add_trace(go.Scatter(x=dd.index, y=dd, name=name, line=dict(color=col, width=w, dash=dash), fill="tozeroy" if fill else None,
+                               fillcolor=fill, hovertemplate=name + ": %{y:.1f}%"))
+    if maxdd_for is not None:
+        dd = (maxdd_for / maxdd_for.cummax() - 1) * 100
+        tr = dd.idxmin()
+        f.add_trace(go.Scatter(x=[tr], y=[dd.min()], mode="markers+text", showlegend=False,
+                               marker=dict(color=LOSS, size=11, symbol="diamond", line=dict(color=PAPER, width=2)),
+                               text=[f"max DD {dd.min():.1f}%"], textposition="middle left", textfont=dict(color=INK, size=11),
+                               hovertemplate=f"{tr:%d %b %Y}: %{{y:.1f}}%<extra></extra>"))
+
+
 def equity(res: Result, title: str):
-    """Equity (top) + underwater (bottom) on one shared, zoomable time axis."""
+    """Equity curve only (drawdown is its own chart, see drawdown())."""
     eq, bm, t = res.equity, res.benchmark, res.trades
     cap = float(eq.iloc[0])
-    f = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[.74, .26], vertical_spacing=.04)
-
-    # shaded "in a trade" bands (skipped when there are too many to stay snappy)
-    if 0 < len(t) <= 400:
+    f = go.Figure()
+    if 0 < len(t) <= 400:      # shaded "in a trade" bands (skipped when there are too many to stay snappy)
         f.update_layout(shapes=[dict(type="rect", xref="x", yref="y domain", x0=a, x1=b, y0=0, y1=1,
-                                     fillcolor="rgba(154,168,255,.06)", line_width=0, layer="below")
-                                for a, b in zip(t.entry_date, t.exit_date)])
-    f.add_trace(go.Scatter(x=bm.index, y=bm, name="Buy & hold", line=dict(color=BENCH, width=2),
-                           hovertemplate="₹%{y:,.0f}"), 1, 1)
+                                     fillcolor=_rgba(STRAT, .06), line_width=0, layer="below") for a, b in zip(t.entry_date, t.exit_date)])
+    f.add_trace(go.Scatter(x=bm.index, y=bm, name="Buy & hold", line=dict(color=BENCH, width=2), hovertemplate="₹%{y:,.0f}"))
     f.add_trace(go.Scatter(x=eq.index, y=eq, name="Strategy", line=dict(color=STRAT, width=3.2),
-                           fill="tozeroy", fillcolor="rgba(154,168,255,.13)", hovertemplate="₹%{y:,.0f}"), 1, 1)
-    # trade results as dots on the curve
+                           fill="tozeroy", fillcolor=_rgba(STRAT, .13), hovertemplate="₹%{y:,.0f}"))
     if len(t):
         ey = eq.reindex(pd.DatetimeIndex(t.exit_date)).to_numpy()
         for sel, nm, col in ((t.ret_pct > 0, "Winning trade", WIN), (t.ret_pct <= 0, "Losing trade", LOSS)):
@@ -57,42 +126,24 @@ def equity(res: Result, title: str):
             f.add_trace(go.Scatter(x=x.exit_date, y=ey[sel.to_numpy()], mode="markers", name=nm,
                                    marker=dict(color=col, size=6, line=dict(color=PAPER, width=1)),
                                    text=x.exit_reason + " · " + x.ret_pct.round(2).astype(str) + "% · " + x.pts.round(0).astype(int).astype(str) + " pts",
-                                   hovertemplate="%{text}<extra></extra>"), 1, 1)
+                                   hovertemplate="%{text}<extra></extra>"))
     log = float(max(eq.max(), bm.max()) / min(eq.min(), bm.min())) > 4
-    # end-of-line labels (annotations on a log axis take log10 coordinates)
-    for ser, col in ((eq, STRAT), (bm, MUTED)):
-        f.add_annotation(x=ser.index[-1], y=float(np.log10(ser.iloc[-1])) if log else float(ser.iloc[-1]), xref="x", yref="y",
-                         text=f"<b>₹{ser.iloc[-1]:,.0f}</b><br>{ser.iloc[-1] / cap - 1:+.0%}", showarrow=False,
-                         xanchor="left", xshift=8, font=dict(color=col, size=12))
+    _end_labels(f, ((eq, STRAT), (bm, MUTED)), log, cap)
+    f.update_yaxes(type="log" if log else "linear", tickprefix="₹", title="Equity")
+    f.update_xaxes(range=_x_range(eq.index))
+    _scale_menu(f, log, _RANGES)
+    f.update_layout(hovermode="x unified", legend=dict(orientation="h", x=.01, y=.985, bgcolor="rgba(0,0,0,0)"), margin=dict(l=14, r=90, t=86, b=14))
+    return _style(f, f"{title} · equity curve", 460)
 
-    # underwater
-    for ser, nm, col, fc in ((bm, "Buy & hold", BENCH, BENCH_FILL), (eq, "Strategy", LOSS, "rgba(244,165,143,.38)")):
-        dd = (ser / ser.cummax() - 1) * 100
-        f.add_trace(go.Scatter(x=dd.index, y=dd, name=nm + " drawdown", showlegend=False, line=dict(color=col, width=1.8),
-                               fill="tozeroy", fillcolor=fc, hovertemplate="%{y:.1f}%"), 2, 1)
-    ddm = (eq / eq.cummax() - 1) * 100
-    tr = ddm.idxmin()
-    f.add_trace(go.Scatter(x=[tr], y=[ddm.min()], mode="markers+text", showlegend=False,
-                           marker=dict(color=LOSS, size=11, symbol="diamond", line=dict(color=PAPER, width=2)),
-                           text=[f"max DD {ddm.min():.1f}%"], textposition="middle left", textfont=dict(color=INK, size=11),
-                           hovertemplate=f"{tr:%d %b %Y}: %{{y:.1f}}%<extra></extra>"), 2, 1)
 
-    f.update_yaxes(type="log" if log else "linear", tickprefix="₹", title="Equity", row=1, col=1)
-    f.update_yaxes(title="Drawdown %", ticksuffix="%", row=2, col=1, rangemode="tozero" if False else "normal")
-    f.update_xaxes(rangeselector=dict(
-        buttons=[dict(count=6, label="6M", step="month", stepmode="backward"), dict(count=1, label="1Y", step="year", stepmode="backward"),
-                 dict(count=3, label="3Y", step="year", stepmode="backward"), dict(count=5, label="5Y", step="year", stepmode="backward"),
-                 dict(step="all", label="All")],
-        bgcolor=PLOT, activecolor=STRAT, font=dict(color=INK, size=11), x=0, y=1.0, yanchor="bottom"), row=1, col=1)
-    pad = (eq.index[-1] - eq.index[0]) * 0.035
-    f.update_xaxes(range=[eq.index[0], eq.index[-1] + pad])
-    f.update_layout(
-        hovermode="x unified", legend=dict(orientation="h", x=.01, y=.985, bgcolor="rgba(0,0,0,0)"),
-        margin=dict(r=90, t=86), updatemenus=[dict(type="buttons", direction="right", x=1, xanchor="right", y=1.0, yanchor="bottom",
-            showactive=False, bgcolor=PLOT, bordercolor=GRID, font=dict(color=INK, size=11),
-            buttons=[dict(label="Linear", method="relayout", args=[{"yaxis.type": "linear"}]),
-                     dict(label="Log", method="relayout", args=[{"yaxis.type": "log"}])])])
-    return _style(f, f"{title} · equity curve", 660)
+def drawdown(res: Result):
+    """Separate underwater chart: % below the previous equity peak, strategy vs buy & hold."""
+    eq, bm = res.equity, res.benchmark
+    f = go.Figure()
+    _dd_traces(f, [(bm, "Buy & hold", BENCH, _rgba(BENCH, .22), 1.8, "solid"), (eq, "Strategy", LOSS, _rgba(LOSS, .38), 2.2, "solid")], maxdd_for=eq)
+    f.update_yaxes(title="Drawdown %", ticksuffix="%"); f.update_xaxes(range=_x_range(eq.index))
+    f.update_layout(hovermode="x unified", legend=dict(orientation="h", x=.01, y=1.12, bgcolor="rgba(0,0,0,0)"), margin=dict(l=14, r=90, t=70, b=14))
+    return _style(f, "Drawdown · how far below the previous peak (and for how long)", 340)
 
 
 def price(res: Result, title: str):
@@ -104,7 +155,7 @@ def price(res: Result, title: str):
         f.add_trace(go.Scatter(x=t.entry_date, y=t.entry_price, mode="markers", name="Entry",
                                marker=dict(symbol="triangle-up", size=11, color=STRAT, line=dict(color=PAPER, width=1.5)),
                                hovertemplate="Entry %{y:,.1f}"))
-        for sel, nm, col in ((t.ret_pct > 0, "Exit · win", "#3fb98a"), (t.ret_pct <= 0, "Exit · loss", "#e8765b")):
+        for sel, nm, col in ((t.ret_pct > 0, "Exit · win", WIN_D), (t.ret_pct <= 0, "Exit · loss", LOSS_D)):
             x = t[sel]
             f.add_trace(go.Scatter(x=x.exit_date, y=x.exit_price, mode="markers", name=nm,
                                    marker=dict(symbol="diamond", size=9, color=col, line=dict(color=PAPER, width=1.5)),
@@ -196,7 +247,7 @@ def monthly(m: pd.Series):
     p = p.pivot(index="y", columns="m", values="r").reindex(columns=range(1, 13))
     f = go.Figure(go.Heatmap(z=p.values, x=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
                              y=p.index.astype(str), zmid=0, xgap=3, ygap=3, texttemplate="%{z:.1f}", textfont=dict(size=10, color=INK),
-                             colorscale=[[0, "#f4a58f"], [.5, "#1c1e3a"], [1, "#7fd4b0"]], colorbar=dict(title="%", thickness=10),
+                             colorscale=[[0, LOSS], [.5, PLOT], [1, WIN]], colorbar=dict(title="%", thickness=10),
                              hovertemplate="%{y} %{x}: %{z:.2f}%"))
     f.update_yaxes(autorange="reversed", type="category"); f.update_xaxes(side="top")
     return _style(f, "Monthly returns calendar (%)", max(300, 26 * len(p) + 120), legend=False)
@@ -228,14 +279,14 @@ def rolling_winrate(res: Result, window: int = 20):
         return None
     wr = (t.ret_pct > 0).rolling(window).mean().mul(100)
     f = go.Figure(go.Scatter(x=t.exit_date, y=wr, line=dict(color=LILAC, width=3), fill="tozeroy",
-                             fillcolor="rgba(196,168,240,.22)", hovertemplate="%{y:.0f}%"))
+                             fillcolor=_rgba(LILAC, .22), hovertemplate="%{y:.0f}%"))
     f.add_hline(y=50, line=dict(color=MUTED, dash="dot")); f.update_yaxes(title="Win rate %", range=[0, 100])
     return _style(f, f"Rolling win rate (last {window} trades)", 320, legend=False)
 
 
 def build_all(res: Result, m: dict, title: str, unit: str = "%") -> dict:
     """name -> (group, figure). Groups drive the portal tabs / report sections."""
-    out = {"equity": ("Performance", equity(res, title)),
+    out = {"equity": ("Performance", equity(res, title)), "drawdown": ("Performance", drawdown(res)),
            "rolling_year": ("Performance", rolling_year(res)), "price": ("Trades", price(res, title))}
     if len(res.trades):
         out["waterfall"] = ("Trades", waterfall(res, unit))
@@ -250,56 +301,38 @@ def build_all(res: Result, m: dict, title: str, unit: str = "%") -> dict:
 
 
 # ------------------------------------------------------------------ portfolio charts
-SLEEVE_COLORS = [SKY, SUN, ROSE, LILAC, WIN, "#f0b27a", "#85c1e9", "#d7bde2", "#a3e4d7", "#f5b7b1"]
 
 
 def portfolio_equity(c):
-    """Combined equity + each strategy sleeve (top) and combined drawdown (bottom) on one shared time axis."""
+    """Combined equity + each strategy standalone (dotted). Drawdown is its own chart, see portfolio_drawdown()."""
     eq, cap = c.equity, c.capital
-    f = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[.7, .3], vertical_spacing=.04)
-    f.add_trace(go.Scatter(x=c.bench.index, y=c.bench, name="Buy & hold (same weights)", line=dict(color=BENCH, width=2),
-                           hovertemplate="₹%{y:,.0f}"), 1, 1)
+    f = go.Figure()
+    f.add_trace(go.Scatter(x=c.bench.index, y=c.bench, name="Buy & hold (same weights)", line=dict(color=BENCH, width=2), hovertemplate="₹%{y:,.0f}"))
     for i, col in enumerate(c.sleeves_eq.columns):
-        f.add_trace(go.Scatter(x=c.sleeves_eq.index, y=c.sleeves_eq[col], name=f"{col} (standalone)", visible="legendonly" if len(c.sleeves_eq.columns) > 6 else True,
-                               line=dict(color=SLEEVE_COLORS[i % len(SLEEVE_COLORS)], width=1.4, dash="dot"), opacity=.9,
-                               hovertemplate="₹%{y:,.0f}"), 1, 1)
+        f.add_trace(go.Scatter(x=c.sleeves_eq.index, y=c.sleeves_eq[col], name=f"{col} (standalone)",
+                               visible="legendonly" if len(c.sleeves_eq.columns) > 6 else True,
+                               line=dict(color=SLEEVE_COLORS[i % len(SLEEVE_COLORS)], width=1.4, dash="dot"), opacity=.9, hovertemplate="₹%{y:,.0f}"))
     f.add_trace(go.Scatter(x=eq.index, y=eq, name="COMBINED", line=dict(color=STRAT, width=3.4), fill="tozeroy",
-                           fillcolor="rgba(154,168,255,.12)", hovertemplate="₹%{y:,.0f}"), 1, 1)
+                           fillcolor=_rgba(STRAT, .12), hovertemplate="₹%{y:,.0f}"))
     low = min(eq.min(), c.bench.min(), c.sleeves_eq.min().min()); high = max(eq.max(), c.bench.max(), c.sleeves_eq.max().max())
     log = high / low > 4
-    for ser, col in ((eq, STRAT), (c.bench, MUTED)):
-        f.add_annotation(x=ser.index[-1], y=float(np.log10(ser.iloc[-1])) if log else float(ser.iloc[-1]), xref="x", yref="y",
-                         text=f"<b>₹{ser.iloc[-1]:,.0f}</b><br>{ser.iloc[-1] / cap - 1:+.0%}", showarrow=False, xanchor="left", xshift=8,
-                         font=dict(color=col, size=12))
-    for col in c.sleeves_eq.columns:
-        pass
-    # drawdowns: each sleeve (on its own capital) thin, combined bold
-    for i, col in enumerate(c.norm.columns):
-        d = (c.norm[col] / c.norm[col].cummax() - 1) * 100
-        f.add_trace(go.Scatter(x=d.index, y=d, name=f"{col} DD", showlegend=False, line=dict(color=SLEEVE_COLORS[i % len(SLEEVE_COLORS)], width=1, dash="dot"),
-                               hovertemplate=f"{col}: %{{y:.1f}}%"), 2, 1)
-    dd = (eq / eq.cummax() - 1) * 100
-    f.add_trace(go.Scatter(x=dd.index, y=dd, name="COMBINED DD", showlegend=False, line=dict(color=LOSS, width=2.4), fill="tozeroy",
-                           fillcolor="rgba(244,165,143,.35)", hovertemplate="Combined: %{y:.1f}%"), 2, 1)
-    tr = dd.idxmin()
-    f.add_trace(go.Scatter(x=[tr], y=[dd.min()], mode="markers+text", showlegend=False,
-                           marker=dict(color=LOSS, size=11, symbol="diamond", line=dict(color=PAPER, width=2)),
-                           text=[f"max DD {dd.min():.1f}%"], textposition="middle left", textfont=dict(color=INK, size=11),
-                           hovertemplate=f"{tr:%d %b %Y}: %{{y:.1f}}%<extra></extra>"), 2, 1)
-    f.update_yaxes(type="log" if log else "linear", tickprefix="₹", title="Equity", row=1, col=1)
-    f.update_yaxes(title="Drawdown %", ticksuffix="%", row=2, col=1)
-    f.update_xaxes(rangeselector=dict(
-        buttons=[dict(count=1, label="1Y", step="year", stepmode="backward"), dict(count=3, label="3Y", step="year", stepmode="backward"),
-                 dict(count=5, label="5Y", step="year", stepmode="backward"), dict(step="all", label="All")],
-        bgcolor=PLOT, activecolor=STRAT, font=dict(color=INK, size=11), x=0, y=1.0, yanchor="bottom"), row=1, col=1)
-    pad = (eq.index[-1] - eq.index[0]) * 0.035
-    f.update_xaxes(range=[eq.index[0], eq.index[-1] + pad])
-    f.update_layout(hovermode="x unified", margin=dict(r=90, t=86), legend=dict(orientation="h", x=.01, y=.985, bgcolor="rgba(0,0,0,0)"),
-                    updatemenus=[dict(type="buttons", direction="right", x=1, xanchor="right", y=1.0, yanchor="bottom", showactive=False,
-                                      bgcolor=PLOT, bordercolor=GRID, font=dict(color=INK, size=11),
-                                      buttons=[dict(label="Linear", method="relayout", args=[{"yaxis.type": "linear"}]),
-                                               dict(label="Log", method="relayout", args=[{"yaxis.type": "log"}])])])
-    return _style(f, "Combined equity & drawdown · dotted lines = each strategy on its own", 680)
+    _end_labels(f, ((eq, STRAT), (c.bench, MUTED)), log, cap)
+    f.update_yaxes(type="log" if log else "linear", tickprefix="₹", title="Equity")
+    f.update_xaxes(range=_x_range(eq.index))
+    _scale_menu(f, log, _RANGES)
+    f.update_layout(hovermode="x unified", legend=dict(orientation="h", x=.01, y=.985, bgcolor="rgba(0,0,0,0)"), margin=dict(l=14, r=90, t=86, b=14))
+    return _style(f, "Combined equity · dotted lines = each strategy on its own", 480)
+
+
+def portfolio_drawdown(c):
+    """Separate drawdown chart for the combined portfolio (bold) and each strategy (dotted)."""
+    f = go.Figure()
+    series = [(c.norm[col], f"{col}", SLEEVE_COLORS[i % len(SLEEVE_COLORS)], None, 1.2, "dot") for i, col in enumerate(c.norm.columns)]
+    series.append((c.equity, "COMBINED", LOSS, _rgba(LOSS, .35), 2.6, "solid"))
+    _dd_traces(f, series, maxdd_for=c.equity)
+    f.update_yaxes(title="Drawdown %", ticksuffix="%"); f.update_xaxes(range=_x_range(c.equity.index))
+    f.update_layout(hovermode="x unified", legend=dict(orientation="h", x=.01, y=1.12, bgcolor="rgba(0,0,0,0)"), margin=dict(l=14, r=90, t=70, b=14))
+    return _style(f, "Combined drawdown · dotted lines = each strategy on its own", 340)
 
 
 def corr_heatmap(m: pd.DataFrame, title: str, lo=-1.0, hi=1.0, fmt=".2f"):
